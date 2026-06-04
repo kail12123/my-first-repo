@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kazakhstan Cities Map</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        
+        .container {
+            display: flex;
+            height: calc(100vh - 100px);
+            gap: 20px;
+            padding: 20px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+        
+        #map {
+            flex: 1;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            z-index: 1;
+        }
+        
+        .sidebar {
+            width: 350px;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        .sidebar h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .city-item {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .city-item:hover {
+            background: #f0f0f0;
+            border-color: #667eea;
+            transform: translateX(5px);
+        }
+        
+        .city-item.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .city-name {
+            font-weight: 600;
+            font-size: 1.1em;
+            margin-bottom: 8px;
+        }
+        
+        .city-desc {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        
+        .city-coords {
+            font-size: 0.85em;
+            opacity: 0.7;
+            margin-top: 8px;
+            font-family: monospace;
+        }
+        
+        .back-btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            border-radius: 20px;
+            font-size: 0.9em;
+            margin-top: 20px;
+            transition: all 0.3s ease;
+        }
+        
+        .back-btn:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        
+        .popup-content {
+            text-align: center;
+            min-width: 200px;
+        }
+        
+        .popup-photo {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .popup-title {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+            font-size: 1.1em;
+        }
+        
+        .popup-desc {
+            color: #666;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 768px) {
+            .container {
+                flex-direction: column;
+                height: auto;
+            }
+            
+            .sidebar {
+                width: 100%;
+                max-height: 400px;
+            }
+            
+            #map {
+                height: 400px;
+            }
+            
+            .header h1 {
+                font-size: 1.5em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗺️ Kazakhstan Cities Map</h1>
+        <p>Click on cities or markers to see details and photos</p>
+    </div>
+    
+    <div class="container">
+        <div id="map"></div>
+        
+        <div class="sidebar">
+            <h2>📍 Cities</h2>
+            <div id="cities-list"></div>
+            <a href="/" class="back-btn">← Back to Home</a>
+        </div>
+    </div>
+    
+    <!-- Leaflet JS -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    
+    <script>
+        let map;
+        let markers = {};
+        let cities = {};
+        
+        // Initialize map
+        function initMap() {
+            map = L.map('map').setView([48.0196, 66.9237], 5);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 19
+            }).addTo(map);
+        }
+        
+        // Fetch cities data
+        async function loadCities() {
+            try {
+                const response = await fetch('/api/cities');
+                cities = await response.json();
+                renderCities();
+                addMarkers();
+            } catch (error) {
+                console.error('Error loading cities:', error);
+            }
+        }
+        
+        // Render cities list in sidebar
+        function renderCities() {
+            const citiesList = document.getElementById('cities-list');
+            citiesList.innerHTML = '';
+            
+            Object.entries(cities).forEach(([name, data]) => {
+                const cityItem = document.createElement('div');
+                cityItem.className = 'city-item';
+                cityItem.innerHTML = `
+                    <div class="city-name">${name}</div>
+                    <div class="city-desc">${data.description}</div>
+                    <div class="city-coords">📍 ${data.lat.toFixed(2)}, ${data.lng.toFixed(2)}</div>
+                `;
+                
+                cityItem.addEventListener('click', () => {
+                    selectCity(name, cityItem);
+                });
+                
+                citiesList.appendChild(cityItem);
+            });
+        }
+        
+        // Add markers to map
+        function addMarkers() {
+            Object.entries(cities).forEach(([name, data]) => {
+                const customIcon = L.divIcon({
+                    className: 'custom-marker',
+                    html: `
+                        <div style="
+                            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                            color: white;
+                            border-radius: 50%;
+                            width: 40px;
+                            height: 40px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-weight: bold;
+                            font-size: 20px;
+                            border: 3px solid white;
+                            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                        ">${name.charAt(0)}</div>
+                    `,
+                    iconSize: [40, 40],
+                    popupAnchor: [0, -20]
+                });
+                
+                const marker = L.marker([data.lat, data.lng], { icon: customIcon })
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <img src="${data.photo}" alt="${name}" class="popup-photo" onerror="this.src='https://via.placeholder.com/200x150?text=${name}'">
+                            <div class="popup-title">${name}</div>
+                            <div class="popup-desc">${data.description}</div>
+                        </div>
+                    `)
+                    .addTo(map);
+                
+                marker.on('click', () => {
+                    highlightCity(name);
+                    marker.openPopup();
+                });
+                
+                markers[name] = marker;
+            });
+        }
+        
+        // Select city and highlight it
+        function selectCity(name, element) {
+            highlightCity(name);
+            
+            const data = cities[name];
+            map.panTo([data.lat, data.lng]);
+            map.setZoom(10);
+        }
+        
+        // Highlight city in sidebar
+        function highlightCity(name) {
+            document.querySelectorAll('.city-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            const items = document.querySelectorAll('.city-item');
+            Object.keys(cities).forEach((cityName, index) => {
+                if (cityName === name) {
+                    items[index].classList.add('active');
+                }
+            });
+        }
+        
+        // Initialize on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            loadCities();
+        });
+    </script>
+</body>
+</html>
